@@ -136,7 +136,7 @@ class PluginParameterMapping:
 
 
 class PluginSwitchMapping(PluginParameterMapping):
-    """Mapping for those special cases where a plugin parameter must be switched to a specific value"""
+    """Mapping for those special cases where a plugin parameter must be toggled between 2 values"""
 
     def __init__(
         self,
@@ -155,7 +155,7 @@ class PluginSwitchMapping(PluginParameterMapping):
         self._current_value_idx = 0
 
 class TrackSwitchMapping(TrackParameterMapping):
-    """Mapping for those special cases where a plugin parameter must be switched to a specific value"""
+    """Mapping for those special cases where a plugin parameter must be toggled between 2 values"""
 
     def __init__(
         self,
