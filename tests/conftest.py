@@ -13,6 +13,18 @@ if str(project_root) not in sys.path:
 import pytest
 from unittest.mock import MagicMock
 
+from guru.testing import FakeSushiController
+
+
+@pytest.fixture
+def fake_sushi() -> FakeSushiController:
+    """A FakeSushiController seeded with a couple of example plugins, for tests
+    that need a real (fake) SushiController rather than a MagicMock."""
+    return FakeSushiController(
+        tracks={"TRACK": 0},
+        processors={"GxVintageFuzzMaster": 0},
+    )
+
 
 @pytest.fixture
 def mock_sushi_controller():

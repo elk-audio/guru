@@ -154,6 +154,7 @@ class PluginSwitchMapping(PluginParameterMapping):
         self.values = (value_A, value_B)
         self._current_value_idx = 0
 
+
 class TrackSwitchMapping(TrackParameterMapping):
     """Mapping for those special cases where a plugin parameter must be toggled between 2 values"""
 
@@ -166,11 +167,10 @@ class TrackSwitchMapping(TrackParameterMapping):
         value_B: float = 1.0,
         preprocessor: Preprocessor | None = None,
     ):
-        super().__init__(
-            track_name, parameter_name, controller_name, preprocessor
-        )
+        super().__init__(track_name, parameter_name, controller_name, preprocessor)
         self.values = (value_A, value_B)
         self._current_value_idx = 0
+
 
 class BypassMapping(PluginParameterMapping):
     def __init__(
@@ -480,7 +480,9 @@ class MappingManager:
     async def _handle_toggle_event(self, event, mapping) -> None:
         """handle toggle/switch events."""
         # toggling value between A and B
-        if isinstance(mapping, TrackSwitchMapping) or isinstance(mapping, PluginSwitchMapping):
+        if isinstance(mapping, TrackSwitchMapping) or isinstance(
+            mapping, PluginSwitchMapping
+        ):
             mapping._current_value_idx = (mapping._current_value_idx + 1) % 2
             value = mapping.values[mapping._current_value_idx]
         else:

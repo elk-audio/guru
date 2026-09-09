@@ -6,23 +6,29 @@ build-backend = "setuptools.build_meta"
 name = "guru"
 version = "1.0.0"
 description = "A library to help develop glue apps for the ElkAudio Stomp platform"
-authors = [{name = "Maxime Gendebien", email = "max@elk.audio"}]
-license = {file = "LICENSE"}
+authors = [{ name = "Maxime Gendebien", email = "max@elk.audio" }]
+license = { file = "LICENSE" }
 readme = "README.md"
 requires-python = ">=3.12, <3.13"
 classifiers = [
-      "Development Status :: 3 - Alpha",
-      "Intended Audience :: Developers",
-      "Programming Language :: Python :: 3",
-      "Programming Language :: Python :: 3.11",
-      "Programming Language :: Python :: 3.12",
-      "Programming Language :: Python :: 3.13",
-  ]
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
 
-dependencies = ["elkpy==1.4.1","grpcio~=1.62.1", "pillow"]
+dependencies = ["elkpy==1.4.0rc1", "grpcio~=1.62.1", "pillow"]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0.0", "pytest-cov>=4.0.0", "pytest-asyncio>=0.21.0", "pyright>=1.1", "grpcio-tools~=1.62.1"]
+dev = [
+  "pytest>=7.0.0",
+  "pytest-cov>=4.0.0",
+  "pytest-asyncio>=0.21.0",
+  "pyright>=1.1",
+  "grpcio-tools~=1.62.1",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["."]
@@ -36,7 +42,7 @@ include = ["src"]
 typeCheckingMode = "basic"
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = { "" = "src" }
 packages = ["guru"]
 include-package-data = true
 
