@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=64", "wheel", "grpcio-tools"]
+requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "guru"
-version = "1.0.0"
+version = "1.1.0"
 description = "A library to help develop glue apps for the ElkAudio Stomp platform"
 authors = [{ name = "Maxime Gendebien", email = "max@elk.audio" }]
 license = { file = "LICENSE" }
@@ -19,7 +19,7 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
 ]
 
-dependencies = ["elkpy==1.4.0rc1", "grpcio~=1.62.1", "pillow"]
+dependencies = ["elkpy==1.4.0", "grpcio~=1.62.1", "pillow"]
 
 [project.optional-dependencies]
 dev = [
