@@ -71,9 +71,17 @@ class SushiClient:
             self.controller = None
 
     def subscribe_to_parameter_updates(self):
+        """Must be called from within the running event loop.
+
+        The IPC notification controller invokes callbacks synchronously from its
+        own receiver thread, so hand each notification back to this loop.
+        """
         assert self.controller is not None
+        loop = asyncio.get_running_loop()
         self.controller.notifications.subscribe_to_parameter_updates(
-            cb=self._handle_param_update_notification
+            cb=lambda notif: asyncio.run_coroutine_threadsafe(
+                self._handle_param_update_notification(notif), loop
+            )
         )
 
     async def _handle_param_update_notification(self, notif) -> None:
