@@ -301,7 +301,7 @@ class MappingManager:
 
     async def _handle_sushi_param_update(self, notification) -> None:
         # await observer.emit("UpdateParameter", mapping.parameter_label)
-        print(notification)
+        logger.debug("Sushi parameter update: %s", notification)
 
     def register_mappings(self, mappings: list[MappingMode]) -> bool:
         """
