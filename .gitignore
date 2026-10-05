@@ -10,8 +10,7 @@ wheels/
 .venv
 
 # Generated protobuf files
-*_pb2.py
 *_pb2.pyi
-*_pb2_grpc.py
 CLAUDE.md
 todo.md
+/uv.lock

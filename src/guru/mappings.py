@@ -8,18 +8,41 @@ returned by RefreshAllStates().
 
 import asyncio
 import time
-from typing import Callable
 from elkpy.sushicontroller import SushiController
 from . import observer
+from .protocols import (
+    ControlCallback,
+    Mapping,
+    Preprocessor,
+    PluginBypassEvent,
+    SushiPluginEvent,
+    SushiTrackEvent,
+)
 import logging
 
 logger = logging.getLogger("MAPPINGS")
 
 
+class MappingMode:
+    """This wraps around a list of mappings to provide more data"""
+
+    def __init__(
+        self,
+        mappings: list,
+        mode: int = 0,
+    ) -> None:
+        self.mode = mode
+        self.mappings = mappings
+
+    async def init(self, sc: SushiController) -> None:
+        for m in self.mappings:
+            await m.init(sc)
+
+
 class Control:
     """This mapping triggers an arbitrary callback. Useful for switching modes or emitting a specific signal"""
 
-    def __init__(self, controller_name: str, cb: Callable | None):
+    def __init__(self, controller_name: str, cb: ControlCallback | None):
         self.controller_name = controller_name
         self.callback = cb
 
@@ -49,7 +72,7 @@ class TrackParameterMapping:
         track_name: str,
         parameter_name: str,
         controller_name: str | None = None,
-        preprocessor: Callable | None = None,
+        preprocessor: Preprocessor | None = None,
         parameter_label: str | None = None,
     ) -> None:
         self.track_name = track_name
@@ -63,10 +86,16 @@ class TrackParameterMapping:
         self.param_id = await sc.parameters.get_parameter_id(
             self.track_id, self.parameter_name
         )
-        self.value = await sc.parameters.get_parameter_value(self.track_id, self.param_id)
+        self.value = await sc.parameters.get_parameter_value(
+            self.track_id, self.param_id
+        )
 
     def __repr__(self) -> str:
-        return "TrackParameterMapping: track=%s, parameter=%s, controller_name=%s" % (self.track_name, self.parameter_name, self.controller_name)
+        return "TrackParameterMapping: track=%s, parameter=%s, controller_name=%s" % (
+            self.track_name,
+            self.parameter_name,
+            self.controller_name,
+        )
 
 
 class PluginParameterMapping:
@@ -78,7 +107,7 @@ class PluginParameterMapping:
         plugin_name: str,
         parameter_name: str,
         controller_name: str | None = None,
-        preprocessor: Callable | None = None,
+        preprocessor: Preprocessor | None = None,
         parameter_label: str | None = None,
     ):
         self.track_name = track_name
@@ -94,14 +123,20 @@ class PluginParameterMapping:
         self.param_id = await sc.parameters.get_parameter_id(
             self.plugin_id, self.parameter_name
         )
-        self.value = await sc.parameters.get_parameter_value(self.plugin_id, self.param_id)
+        self.value = await sc.parameters.get_parameter_value(
+            self.plugin_id, self.param_id
+        )
 
     def __repr__(self) -> str:
-        return "PluginParameterMapping: plugin=%s, parameter=%s, controller_name=%s" % (self.plugin_name, self.parameter_name, self.controller_name)
+        return "PluginParameterMapping: plugin=%s, parameter=%s, controller_name=%s" % (
+            self.plugin_name,
+            self.parameter_name,
+            self.controller_name,
+        )
 
 
-class SwitchMapping(PluginParameterMapping):
-    """Mapping for those special cases where a plugin parameter must be switched to a specific value"""
+class PluginSwitchMapping(PluginParameterMapping):
+    """Mapping for those special cases where a plugin parameter must be toggled between 2 values"""
 
     def __init__(
         self,
@@ -109,15 +144,32 @@ class SwitchMapping(PluginParameterMapping):
         plugin_name: str,
         parameter_name: str,
         controller_name: str,
-        pressed_value: float,
-        released_value: float,
-        preprocessor: Callable | None = None,
+        value_A: float = 0.0,
+        value_B: float = 1.0,
+        preprocessor: Preprocessor | None = None,
     ):
         super().__init__(
             track_name, plugin_name, parameter_name, controller_name, preprocessor
         )
-        self.pressed_value = pressed_value
-        self.released_value = released_value
+        self.values = (value_A, value_B)
+        self._current_value_idx = 0
+
+
+class TrackSwitchMapping(TrackParameterMapping):
+    """Mapping for those special cases where a plugin parameter must be toggled between 2 values"""
+
+    def __init__(
+        self,
+        track_name: str,
+        parameter_name: str,
+        controller_name: str,
+        value_A: float = 0.0,
+        value_B: float = 1.0,
+        preprocessor: Preprocessor | None = None,
+    ):
+        super().__init__(track_name, parameter_name, controller_name, preprocessor)
+        self.values = (value_A, value_B)
+        self._current_value_idx = 0
 
 
 class BypassMapping(PluginParameterMapping):
@@ -125,7 +177,7 @@ class BypassMapping(PluginParameterMapping):
         self,
         plugin_name: str,
         controller_name: str,
-        preprocessor: Callable | None = None,
+        preprocessor: Preprocessor | None = None,
     ):
         self.plugin_name = plugin_name
         self.controller_name = controller_name
@@ -135,7 +187,10 @@ class BypassMapping(PluginParameterMapping):
         self.plugin_id = await sc.audio_graph.get_processor_id(self.plugin_name)
 
     def __repr__(self) -> str:
-        return "BypassMapping: plugin=%s, controller=%s}" % (self.plugin_name, self.controller_name)
+        return "BypassMapping: plugin=%s, controller=%s}" % (
+            self.plugin_name,
+            self.controller_name,
+        )
 
 
 class ComboMapping:
@@ -143,10 +198,10 @@ class ComboMapping:
 
     def __init__(
         self,
-        mappings: list[TrackParameterMapping | PluginParameterMapping | SwitchMapping],
+        mappings: list[Mapping],
         controller_name: str,
         parameter_label: str = "Combo",
-        initial_value: float = 0.0
+        initial_value: float = 0.0,
     ) -> None:
         self.mappings = mappings
         self.controller_name = controller_name
@@ -196,7 +251,9 @@ class MappingManager:
 
     def __init__(self) -> None:
         observer.subscribe(event="UiEvent", cb=self._dispatch_ui_event)
-        observer.subscribe(event="SushiParameterUpdate", cb=self._handle_sushi_param_update)
+        observer.subscribe(
+            event="SushiParameterUpdate", cb=self._handle_sushi_param_update
+        )
         observer.subscribe(event="NewControllerMap", cb=self._update_controller_map)
         observer.subscribe(event="ModeSwitch", cb=self._switch_mode)
         observer.subscribe(event="CycleMode", cb=self._cycle_mode)
@@ -205,17 +262,7 @@ class MappingManager:
         )
         self._accelerators: dict[int, AcceleratedEncoder] = {}
         self._mappings_initialized: bool = False
-        self.mappings_by_controller_id: list[
-            dict[
-                int,
-                PluginParameterMapping
-                | TrackParameterMapping
-                | SwitchMapping
-                | BypassMapping
-                | Control
-                | ComboMapping,
-            ]
-        ] = []
+        self.mappings_by_controller_id: list[dict[int, Mapping]] = []
         self.controller_map: dict | None = None
         self._mode = 0
         self._pressed: set[str] = set()
@@ -223,11 +270,14 @@ class MappingManager:
         self._multipress_detection_task: asyncio.Task | None = None
         self._multipress_mappings: dict[frozenset[str], object] = {}
 
-    async def initialize_mappings(self, mappings: list) -> None:
-        map = [m for lst in mappings for m in lst if not isinstance(m, Control)]
-        if map == []:
-            logger.warning("There are no mappings specified.")
-        await observer.emit(signal="InitMapping", mappings=map)
+    async def initialize_mappings(self, mappings: list[MappingMode]) -> None:
+        all_mappings = []
+        for mode in mappings:
+            map = [m for m in mode.mappings if not isinstance(m, Control)]
+            if map == []:
+                logger.warning("There are no mappings specified.")
+            all_mappings.extend(map)
+        await observer.emit(signal="InitMapping", mappings=all_mappings)
 
     def _cycle_mode(self) -> None:
         self._mode = (self._mode + 1) % len(self.mappings_by_controller_id)
@@ -253,7 +303,7 @@ class MappingManager:
         # await observer.emit("UpdateParameter", mapping.parameter_label)
         print(notification)
 
-    def register_mappings(self, mappings: list[PluginParameterMapping]) -> bool:
+    def register_mappings(self, mappings: list[MappingMode]) -> bool:
         """
         Register mappings and resolve controller names to IDs.
         Builds an internal dict of k, v where k is a controller ID gotten
@@ -275,11 +325,11 @@ class MappingManager:
         # Clearing existing mappings
         self.mappings_by_controller_id = []
 
-        for mode, map in enumerate(mappings):
+        for i, mode in enumerate(mappings):
             self.mappings_by_controller_id.append({})
-            for mapping in map:
+            for mapping in mode.mappings:
                 self._register_single_mapping(
-                    mapping, self.mappings_by_controller_id[mode]
+                    mapping, self.mappings_by_controller_id[i]
                 )
 
         logger.debug("all mappings registered successfully")
@@ -287,14 +337,8 @@ class MappingManager:
 
     def _register_single_mapping(
         self,
-        mapping: PluginParameterMapping
-        | SwitchMapping
-        | TrackParameterMapping
-        | Control
-        | ComboMapping
-        | BypassMapping
-        | MultiSwitch,
-        mapping_dict_for_mode: dict,
+        mapping: Mapping | MultiSwitch,
+        mapping_dict_for_mode: dict[int, Mapping],
     ) -> None:
         assert self.controller_map is not None
 
@@ -382,6 +426,9 @@ class MappingManager:
             mapping = self.mappings_by_controller_id[self._mode].get(
                 event.controller_id
             )
+            if not mapping:
+                return
+
             if event_type == "relative_ev" and hasattr(mapping, "value"):
                 if event.controller_id not in self._accelerators:
                     self._accelerators[event.controller_id] = AcceleratedEncoder()
@@ -419,7 +466,7 @@ class MappingManager:
                 elif event_type == "range_ev":
                     await self._handle_range_event(event, mapping)
                 else:
-                    logger.warning(f"unknown event type: {event_type}")
+                    logger.warning("Unknown event type: %s", event_type)
 
     async def _run_combo_mapping(self, combo_mapping, event, event_type) -> None:
         for m in combo_mapping.mappings:
@@ -432,27 +479,30 @@ class MappingManager:
 
     async def _handle_toggle_event(self, event, mapping) -> None:
         """handle toggle/switch events."""
-        # determine value based on switch state
-        if isinstance(mapping, SwitchMapping):
-            value = (
-                mapping.pressed_value
-                if event.toggle_ev.value
-                else mapping.released_value
-            )
+        # toggling value between A and B
+        if isinstance(mapping, TrackSwitchMapping) or isinstance(
+            mapping, PluginSwitchMapping
+        ):
+            mapping._current_value_idx = (mapping._current_value_idx + 1) % 2
+            value = mapping.values[mapping._current_value_idx]
         else:
             # for regular mappings, treat as binary 1.0/0.0
             value = 1.0 if event.toggle_ev.value else 0.0
 
         await self._create_sushi_event(event, mapping, value)
 
-        logger.debug("Toggle event: controller=%s, pressed=%s", event.controller_id, value)
+        logger.debug(
+            "Toggle event: controller=%s, pressed=%s", event.controller_id, value
+        )
 
     async def _create_sushi_event(self, event, mapping, value) -> None:
         # apply preprocessor if defined
         if mapping.preprocessor:
             value = mapping.preprocessor(value)
 
-        logger.debug("Analog event: controller=%s, value=%s", event.controller_id, value)
+        logger.debug(
+            "Analog event: controller=%s, value=%s", event.controller_id, value
+        )
 
         # mapping.value = value
 
@@ -482,7 +532,9 @@ class MappingManager:
         - clamp values to parameter ranges
         """
         logger.debug(
-            "Relative event: controller=%s, New value=%s", event.controller_id, mapping.value
+            "Relative event: controller=%s, New value=%s",
+            event.controller_id,
+            mapping.value,
         )
         await self._create_sushi_event(event, mapping, mapping.value)
 
@@ -519,29 +571,24 @@ class MappingManager:
     async def _emit_sushi_plugin_event(
         self, track_id: int, plugin_id: int, param_id: int, value: float
     ) -> None:
-        # send to sushi
-        await observer.emit(
-            "SushiPluginEvent",
-            {
-                "track_id": track_id,
-                "plugin_id": plugin_id,
-                "param_id": param_id,
-                "value": value,
-            },
-        )
+        event: SushiPluginEvent = {
+            "track_id": track_id,
+            "plugin_id": plugin_id,
+            "param_id": param_id,
+            "value": value,
+        }
+        await observer.emit("SushiPluginEvent", event)
 
     async def _emit_sushi_track_event(
         self, track_id: int, param_id: int, value: float
     ) -> None:
-        # send to sushi
-        await observer.emit(
-            "SushiTrackEvent",
-            {
-                "track_id": track_id,
-                "param_id": param_id,
-                "value": value,
-            },
-        )
+        event: SushiTrackEvent = {
+            "track_id": track_id,
+            "param_id": param_id,
+            "value": value,
+        }
+        await observer.emit("SushiTrackEvent", event)
 
     async def _emit_sushi_bypass_event(self, plugin_id: int) -> None:
-        await observer.emit("PluginBypassEvent", {"plugin_id": plugin_id})
+        event: PluginBypassEvent = {"plugin_id": plugin_id}
+        await observer.emit("PluginBypassEvent", event)

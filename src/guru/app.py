@@ -12,15 +12,14 @@ import sys
 from pathlib import Path
 
 from .sensei_client import SenseiClient
-from .sushi_client import MappingError, SushiClient
-from .mappings import MappingManager
+from .sushi_client import MappingError, TransportMode, SushiClient
+from .mappings import MappingManager, MappingMode
 from .presets import PresetManager
 from . import id_cache
 
 DEFAULT_SUSHI_ADDRESS = "localhost:51051"
 if sys.platform == "win32":
     DEFAULT_SUSHI_ADDRESS = "localhost:510"
-
 
 class ShutdownSignalException(Exception):
     """Exception raised by the shutdown signal monitoring Task"""
@@ -43,9 +42,10 @@ class GlueApp:
 
     def __init__(
         self,
-        mappings: list | None = None,
+        mappings: list[MappingMode] | None = None,
         sensei_address: str = "localhost:50051",
         sushi_address: str = DEFAULT_SUSHI_ADDRESS,
+        sushi_transport = TransportMode.IPC,
         log_level: int = logging.INFO,
         id_cache_path: str | None = None,
     ):
@@ -77,7 +77,7 @@ class GlueApp:
         # Initialize clients (but don't connect yet)
         self.sensei_client = SenseiClient(self.sensei_address)
         self.mapping_manager = MappingManager()
-        self.sushi_client = SushiClient(self.sushi_address)
+        self.sushi_client = SushiClient(sushi_transport, self.sushi_address)
         self.preset_manager = PresetManager()
 
     def _setup_signal_handlers(self):
@@ -123,7 +123,9 @@ class GlueApp:
         # Connect to Sushi client
         self.logger.info("Initializing Sushi client")
         while not self._shutdown_event.is_set():
-            if not await self.sushi_client.connect(subscribe_to_parameter_updates=subscribe_to_parameter_updates):
+            if not await self.sushi_client.connect(
+                subscribe_to_parameter_updates=subscribe_to_parameter_updates
+            ):
                 try:
                     await asyncio.wait_for(self._shutdown_event.wait(), timeout=1.0)
                     return False  # Shutdown requested during retry
@@ -169,15 +171,22 @@ class GlueApp:
             async with asyncio.TaskGroup() as tg:
                 tg.create_task(self.sensei_client.stream_events())
                 tg.create_task(self._wait_for_shutdown())
+                tg.create_task(self._refresh_sensei())
+
         except* ShutdownSignalException as eg:
             # TaskGroup wraps exceptions in ExceptionGroup
             self.logger.info("Shutting down...")
-            # for exc in eg.exceptions:
-            #     self.logger.error(f"Task error: {exc}", exc_info=exc)
         finally:
             await self.stop()
 
         return 0
+
+    async def _refresh_sensei(self) -> None:
+        """Triggers Sensei to fire events for all its api. Needed to get jack insertion statuses for instance"""
+        await asyncio.sleep(
+            1
+        )  # This sleep is to ensure that sensei_client is already streaming events
+        await self.sensei_client.refresh_all_states()
 
     async def _wait_for_shutdown(self):
         """Wait for shutdown signal."""

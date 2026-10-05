@@ -1,6 +1,6 @@
 import pytest
 import asyncio
-from glue_app import observer
+from guru import observer
 
 
 @pytest.fixture(autouse=True)

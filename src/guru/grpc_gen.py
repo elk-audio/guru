@@ -1,3 +1,6 @@
+"""
+This module is DEPRECATED
+"""
 import __main__
 import os
 import sys

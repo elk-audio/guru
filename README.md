@@ -218,7 +218,6 @@ uv sync
 uv sync --extra dev
 ```
 
-The gRPC code is automatically compiled from `sensei_rpc.proto` during package build.
 
 ## Configuration
 
