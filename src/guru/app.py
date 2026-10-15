@@ -18,8 +18,10 @@ from .presets import PresetManager
 from . import id_cache
 
 DEFAULT_SUSHI_ADDRESS = "localhost:51051"
+DEFAULT_TRANSPORT = TransportMode.IPC
 if sys.platform == "win32":
     DEFAULT_SUSHI_ADDRESS = "localhost:510"
+    DEFAULT_TRANSPORT = TransportMode.RPC
 
 class ShutdownSignalException(Exception):
     """Exception raised by the shutdown signal monitoring Task"""
@@ -45,7 +47,7 @@ class GlueApp:
         mappings: list[MappingMode] | None = None,
         sensei_address: str = "localhost:50051",
         sushi_address: str = DEFAULT_SUSHI_ADDRESS,
-        sushi_transport = TransportMode.IPC,
+        sushi_transport = DEFAULT_TRANSPORT,
         log_level: int = logging.INFO,
         id_cache_path: str | None = None,
     ):
